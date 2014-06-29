@@ -11,14 +11,14 @@ using Voron.Graph.Impl;
 
 namespace Voron.Graph.Algorithms.ShortestPath
 {
-    public class BellmanFordShortestPath : BaseAlgorithm, IMultiDestinationShortestPath
+    public class BellmanFordMultiDestinationShortestPath : BaseAlgorithm, IMultiDestinationShortestPath
     {
         private readonly Node _rootNode;
         private readonly GraphAdminQueries _graphAdminQueries;
         private readonly Transaction _tx;
         private readonly CancellationToken _cancelToken;
 
-        public BellmanFordShortestPath(Transaction tx, GraphStorage graphStorage, Node root, CancellationToken cancelToken)
+        public BellmanFordMultiDestinationShortestPath(Transaction tx, GraphStorage graphStorage, Node root, CancellationToken cancelToken)
         {
             _graphAdminQueries = graphStorage.AdminQueries;
             _rootNode = root;
@@ -108,7 +108,7 @@ namespace Voron.Graph.Algorithms.ShortestPath
                     throw new ArgumentNullException("node");
 
                 if (!PreviousNodeInOptimizedPath.ContainsKey(node.Key))
-                    return results;
+                    return null;
 
                 long currentNodeKey = node.Key;
                 while (RootNode.Key != currentNodeKey)

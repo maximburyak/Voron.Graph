@@ -21,6 +21,8 @@ namespace Voron.Graph.Algorithms.ShortestPath
         private readonly Node _rootNode;
         private readonly Node _targetNode;
 
+        public Func<bool> IsProcessingQueueEmpty { get; set; }
+
         public SingleDestinationShortestPathVisitor(Node rootNode,
             Node targetNode, 
             Func<Node, Node, double> h,
@@ -35,9 +37,8 @@ namespace Voron.Graph.Algorithms.ShortestPath
             _g = g;
         }
 
-        public void DiscoverAdjacent(Primitives.NodeWithEdge neighboorNode)
+        public virtual void DiscoverAdjacent(Primitives.NodeWithEdge neighboorNode)
         {
-            
             var estimation = _g(_currentTraversalNodeInfo,neighboorNode) + _h(_rootNode,neighboorNode.Node);
             var currentNodeKey = neighboorNode.Node.Key;
 
@@ -57,18 +58,19 @@ namespace Voron.Graph.Algorithms.ShortestPath
                 PreviousNodeInOptimalPath[currentNodeKey] = _currentTraversalNodeInfo.CurrentNode.Key;
         }
 
-        public void ExamineTraversalInfo(TraversalNodeInfo traversalNodeInfo)
+        public virtual void ExamineTraversalInfo(TraversalNodeInfo traversalNodeInfo)
         {
             _currentTraversalNodeInfo = traversalNodeInfo;
             if (_targetNode != null && _currentTraversalNodeInfo.CurrentNode.Key == _targetNode.Key)
                 _hasDiscoveredDestination = true;
         }
 
-        public bool ShouldStopTraversal
+        public virtual bool ShouldStopTraversal
         {
             get 
             {
-                return _hasDiscoveredDestination;
+                return (IsProcessingQueueEmpty == null) ? _hasDiscoveredDestination :
+                                    _hasDiscoveredDestination && IsProcessingQueueEmpty();
             }
         }
 
@@ -80,7 +82,7 @@ namespace Voron.Graph.Algorithms.ShortestPath
             }
         }
 
-        public bool ShouldSkipAdjacentNode(Primitives.NodeWithEdge adjacentNode)
+        public virtual bool ShouldSkipAdjacentNode(Primitives.NodeWithEdge adjacentNode)
         {
             return false;
         }

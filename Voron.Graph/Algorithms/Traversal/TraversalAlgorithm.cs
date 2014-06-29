@@ -21,11 +21,10 @@ namespace Voron.Graph.Algorithms.Traversal
         private readonly HashSet<EdgeTreeKey> TraversedEdges;
         private readonly Transaction _tx;
         private readonly GraphStorage _graphStorage;
-        private CancellationToken _cancelToken;
+        private CancellationToken? _cancelToken;
         private readonly Node _rootNode;
 
-        //TODO: change this into delegate so edges can be filtered by multiple types
-        public ushort? EdgeTypeFilter { get; set; }
+        public Func<ushort,bool> EdgeTypePredicate { get; set; }
 
         public uint? TraverseDepthLimit { get; set; }
 
@@ -35,7 +34,7 @@ namespace Voron.Graph.Algorithms.Traversal
             GraphStorage graphStorage, 
             Node rootNode, 
             TraversalType traversalType,
-            CancellationToken cancelToken)
+            CancellationToken? cancelToken)
             : this(tx,
             graphStorage,
             rootNode,
@@ -50,7 +49,7 @@ namespace Voron.Graph.Algorithms.Traversal
             GraphStorage graphStorage, 
             Node rootNode, 
             INodeTraversalStore<TraversalNodeInfo> processingQueue,
-            CancellationToken cancelToken)
+            CancellationToken? cancelToken)
         {
             _processingQueue = processingQueue;
 
@@ -81,26 +80,19 @@ namespace Voron.Graph.Algorithms.Traversal
             while (_processingQueue.Count > 0)
             {
                 if (_cancelToken != null)
-                    _cancelToken.ThrowIfCancellationRequested();
+                    _cancelToken.Value.ThrowIfCancellationRequested();
 
                 var traversalInfo = _processingQueue.GetNext();
-                
+
                 if (Visitor != null)
-                {
                     Visitor.ExamineTraversalInfo(traversalInfo);
-                    if(Visitor.ShouldStopTraversal)
-                    {
-                        OnStateChange(AlgorithmState.Aborted);
-                        break;
-                    }                   
-                }
 
                 foreach (var childNodeWithEdge in
-                    _graphStorage.Queries.GetAdjacentOf(_tx, traversalInfo.CurrentNode, EdgeTypeFilter ?? 0)
+                    _graphStorage.Queries.GetAdjacentOf(_tx, traversalInfo.CurrentNode, EdgeTypePredicate)
                                          .Where(nodeWithEdge => !TraversedEdges.Contains(nodeWithEdge.EdgeTo.Key)))
                 {
                     if (_cancelToken != null)
-                        _cancelToken.ThrowIfCancellationRequested();
+                        _cancelToken.Value.ThrowIfCancellationRequested();
 
                     if (TraverseDepthLimit.HasValue && traversalInfo.TraversalDepth == TraverseDepthLimit)
                         continue;
@@ -120,17 +112,24 @@ namespace Voron.Graph.Algorithms.Traversal
                         LastEdgeWeight = childNodeWithEdge.EdgeTo.Weight,
                         ParentNode = traversalInfo.CurrentNode,
                         TraversalDepth = traversalInfo.TraversalDepth + 1,
-                        TotalEdgeWeightUpToNow = traversalInfo.TotalEdgeWeightUpToNow + childNodeWithEdge.EdgeTo.Weight                        
+                        TotalEdgeWeightUpToNow = traversalInfo.TotalEdgeWeightUpToNow + childNodeWithEdge.EdgeTo.Weight
                     });
                 }
+
+                if (Visitor != null && Visitor.ShouldStopTraversal)
+                {
+                    OnStateChange(AlgorithmState.Aborted);
+                    break;
+                }
+
             }
 
             OnStateChange(AlgorithmState.Finished);
         }
 
         public Task TraverseAsync()
-        {
-            return Task.Run(() => Traverse(), _cancelToken);
+        {            
+            return (_cancelToken != null) ? Task.Run(() => Traverse(), _cancelToken.Value) : Task.Run(() => Traverse());
         }       
 
         #region Traversal Storage Implementations
@@ -207,5 +206,13 @@ namespace Voron.Graph.Algorithms.Traversal
         }
 
         #endregion
+
+        public int ProcessingQueueCount
+        {
+            get
+            {
+                return _processingQueue.Count;
+            }
+        }
     }
 }
