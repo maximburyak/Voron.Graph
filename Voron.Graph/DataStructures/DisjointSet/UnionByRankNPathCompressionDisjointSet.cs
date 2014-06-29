@@ -65,9 +65,8 @@ namespace Voron.Graph.DataStructures.DisjointSet
                                 JObject value;
                                 Util.EtagAndValueFromStream(readResultAsStream, out etag, out value);
 
-                                var newNode = new Node(nodeIterator.CurrentKey.CreateReader().ReadBigEndianInt64(), value, etag);
-                                _disjointGraph.Commands.CreateNode(tr,newNode.Key, value);
-                                _disjointGraph.Commands.CreateEdgeBetween(tr, newNode, newNode);
+                                Make(tr, nodeIterator.CurrentKey.CreateReader().ReadBigEndianInt64());
+                                
                             }
                         }
                         while (nodeIterator.MoveNext());
@@ -89,7 +88,7 @@ namespace Voron.Graph.DataStructures.DisjointSet
         // optioinal
         public void Make(Transaction tx,long newKey)
         {
-            var newNode = _disjointGraph.Commands.CreateNode(tx, newKey, JObject.FromObject(new { Key = newKey}));
+            var newNode = _disjointGraph.Commands.CreateNode(tx, newKey, JObject.FromObject(new { Rank = 0}));
             _disjointGraph.Commands.CreateEdgeBetween(tx, newNode, newNode);
         }
 
@@ -105,29 +104,86 @@ namespace Voron.Graph.DataStructures.DisjointSet
         public void Union(Transaction tx, long fromKey, long toKey)
         {
             throw new NotImplementedException();
+
+            Edge fromKeyEdgeToParent, toKeyEdgeToParent;
+            Node fromKeyNode, toKeyNode;
+            int fromKeyRootRank = 0, toKeyRootRank = 0;
+
+            var fromKeyRoot = Find(tx, fromKey, out fromKeyEdgeToParent, out fromKeyNode);
+            var toKeyRoot = Find(tx, toKey, out toKeyEdgeToParent, out fromKeyNode);
+            if (fromKeyRoot.Key == toKeyRoot.Key)
+            {
+                return;
+            }
+            
+            fromKeyRootRank = (int)fromKeyRoot.Data["Rank"];
+            toKeyRootRank = (int)toKeyRoot.Data["Rank"];
+            
+            if ( fromKeyRootRank< toKeyRootRank)
+            {
+                _disjointGraph.Commands.Delete(tx,fromKeyEdgeToParent);
+
+                fromKeyEdgeToParent.Key.NodeKeyTo = toKeyRoot.Key;
+                _disjointGraph.Commands.CreateEdgeBetween(tx, fromKeyNode, toKeyNode);
+            }
+            else if (fromKeyRootRank< toKeyRootRank)
+            {
+                _disjointGraph.Commands.Delete(tx, toKeyEdgeToParent);
+                toKeyEdgeToParent.Key.NodeKeyTo = fromKeyRoot.Key;
+                _disjointGraph.Commands.CreateEdgeBetween(tx, toKeyNode, fromKeyNode);
+            }
+            else
+            {
+                _disjointGraph.Commands.Delete(tx, toKeyEdgeToParent);
+                toKeyEdgeToParent.Key.NodeKeyTo = fromKeyRoot.Key;
+                _disjointGraph.Commands.CreateEdgeBetween(tx, toKeyNode, fromKeyNode);
+                fromKeyNode.Data["Rank"] = fromKeyRootRank + 1;
+
+                _disjointGraph.Commands.TryUpdate(tx,fromKeyNode);
+            }            
         }
 
-        public long Find(long initialKey)
+        public Node Find(long initialKey, out Edge edgeToFirstParent, out Node firstNode)
         {
             using (var tx = _disjointGraph.NewTransaction(TransactionFlags.Read))
             {
-                return this.Find(tx, initialKey);
+                return this.Find(tx, initialKey, out edgeToFirstParent, out firstNode);
             }
         }
 
-        public long Find(Transaction tx, long initialKey)
+        public Node Find(Transaction tx, long initialKey, out Edge edgeToFirstParent, out Node firstNode)
         {
             long parentKey = -1;
             long currentKey = initialKey;
             Node curNode;
+            edgeToFirstParent = null;
+            firstNode = null;
             do
             {
                 curNode = _disjointGraph.Queries.LoadNode(tx, currentKey);
-                curNode.Data["Parent"]
+                var parent = _disjointGraph.Queries.GetAdjacentOf(tx,curNode).FirstOrDefault();
+
+                if (firstNode != null)
+                {
+                    firstNode = curNode;
+                }
+                if (parent!= null)
+                {
+                   parentKey =  parent.Node.Key;
+
+                   if (edgeToFirstParent!= null)
+                   {
+                       edgeToFirstParent = parent.EdgeTo;
+                   }
+                }
+                else
+                {
+                    throw new ArgumentException("disjoint set hierarchy must end with node pointing to itself");
+                }
             }
             while (parentKey != currentKey);
 
-            return currentKey;
+            return curNode;
         }
     }
 }
