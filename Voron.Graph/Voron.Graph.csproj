@@ -67,6 +67,9 @@
     <Compile Include="Algorithms\Traversal\TraversalAlgorithm.cs" />
     <Compile Include="Algorithms\Traversal\TraversalNodeInfo.cs" />
     <Compile Include="Algorithms\ShortestPath\DijkstraShortestPath.cs" />
+    <Compile Include="DataStructures\DisjointSet\BaseDisjointSet.cs" />
+    <Compile Include="DataStructures\DisjointSet\IDisjointSet.cs" />
+    <Compile Include="DataStructures\DisjointSet\UnionByRankNPathCompressionDisjointSet.cs" />
     <Compile Include="Exceptions\AlgorithmConstraintException.cs" />
     <Compile Include="Extensions\AlgorithmExtensions.cs" />
     <Compile Include="Algorithms\AlgorithmState.cs" />

@@ -50,6 +50,30 @@ namespace Voron.Graph.Impl
         }
 
 
+        /// <summary>
+        /// creates new node, based on key and value, does not use the key generation mechanism
+        /// </summary>
+        /// <param name="tx"></param>
+        /// <param name="key"></param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public Node CreateNode(Transaction tx, long key, JObject value)
+        {
+            if (tx == null) throw new ArgumentNullException("tx");
+            if (value == null) throw new ArgumentNullException("value");
+                        
+
+            var nodeKey = key.ToSlice();
+            var etag = Etag.Generate();
+
+            tx.NodeTree.Add(nodeKey, Util.EtagAndValueToStream(etag, value));
+            tx.KeyByEtagTree.Add(etag.ToSlice(), nodeKey);
+            tx.DisconnectedNodeTree.Add(nodeKey, value.ToStream());
+
+            return new Node(key, value, etag);
+        }
+
+
         public Node CreateNode(Transaction tx)
         {
             return CreateNode(tx, new JObject());

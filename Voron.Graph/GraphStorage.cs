@@ -14,6 +14,7 @@ namespace Voron.Graph
         private readonly string _disconnectedNodesTreeName;
         private readonly string _keyByEtagTreeName;
         private readonly string _graphMetadataKey;
+        private readonly string _graphName;
 
         private long _nextId;
 
@@ -21,6 +22,7 @@ namespace Voron.Graph
         {
             if (String.IsNullOrWhiteSpace(graphName)) throw new ArgumentNullException("graphName");
             if (storageEnvironment == null) throw new ArgumentNullException("storageEnvironment");
+            _graphName = graphName;
             _nodeTreeName = graphName + Constants.NodeTreeNameSuffix;
             _edgeTreeName = graphName + Constants.EdgeTreeNameSuffix;
             _disconnectedNodesTreeName = graphName + Constants.DisconnectedNodesTreeNameSuffix;
@@ -33,6 +35,11 @@ namespace Voron.Graph
             CreateSchema();
             CreateCommandAndQueryInstances();
             _nextId = GetLatestStoredNodeKey();
+        }
+
+        public GraphStorage CreateSubStorage(string graphName)
+        {            
+            return new GraphStorage(_graphName + "_" + graphName, _storageEnvironment);
         }
 
         public Transaction NewTransaction(TransactionFlags flags, TimeSpan? timeout = null)
@@ -60,7 +67,7 @@ namespace Voron.Graph
                     return iterator.CurrentKey.CreateReader().ReadBigEndianInt64();
                 }
             }
-        }
+        }     
 
         private void CreateConventions()
         {
